@@ -1,0 +1,7 @@
+方法二：使用Eclipse的Export功能：
+打包成可运行的jar包
+步骤如下：
+  1）在要打包的项目上右击，选择Export
+  2）在弹出的窗口中，选择Java -> Runnable JAR File，然后点击next按钮
+  3）在Runnable JAR File Specification窗口中，选择Launch configuration和Export destination
+  4）点击Finish按钮，打包完成。

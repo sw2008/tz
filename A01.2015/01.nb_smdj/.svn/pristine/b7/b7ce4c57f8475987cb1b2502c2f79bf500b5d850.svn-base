@@ -1,0 +1,9 @@
+oracle.driver=oracle.jdbc.driver.OracleDriver
+oracle.url=jdbc:oracle:thin:@166.111.32.21:1521:jhqdb
+oracle.username=nb_itf_smdj
+oracle.password=smdj
+
+mssql.driver=com.microsoft.sqlserver.jdbc.SQLServerDriver
+mssql.url=jdbc:sqlserver://192.168.100.10:1433;databasename=NbrcFileManager
+mssql.username=sa
+mssql.password=wd12345678

@@ -1,0 +1,19 @@
+package com.nb.smdj;
+
+public class NBMssql extends NBSjj{  
+
+    public NBMssql() {
+//    wf_url = "jdbc:sqlserver://127.0.0.1:7788;instancename=GSQL;databasename=NbrcFileManage"; 
+//    wf_user = "nb_smdj";
+//    wf_password = "smdj";
+//    wf_driver = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+      
+      
+      wf_url = "jdbc:sqlserver://192.168.100.10:1433;databasename=NbrcFileManager"; 
+      wf_user = "sa";
+      wf_password = "wd12345678";
+      wf_driver = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+    }   
+   
+   
+}

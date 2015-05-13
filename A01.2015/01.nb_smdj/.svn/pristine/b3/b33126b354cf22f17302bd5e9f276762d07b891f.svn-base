@@ -1,0 +1,48 @@
+package com.nb.smdj;
+import java.sql.ResultSet;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+import org.quartz.Job;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.JobKey;
+import org.quartz.SchedulerMetaData;
+  
+public class NBSmdjJob implements Job {     
+    public static String xf_zt; //任务状态 
+    
+    public NBSmdjJob() {    }  
+      
+    public void execute(JobExecutionContext context) throws JobExecutionException {  
+	if("ZX".equals(xf_zt)) return ;
+	xf_zt = "ZX";
+        JobKey jobKey = context.getJobDetail().getKey();          
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");       
+        try {
+          SchedulerMetaData metaData = context.getScheduler().getMetaData();         
+          System.out.println("Quarta JobKey : " + jobKey + " 执行时间:  " + sdf.format(new Date()) + ";Executed " + metaData.getNumberOfJobsExecuted() + " jobs."); 
+          
+          NBSjj v_ms_sjj = new NBMssql(); //毕业生系统
+          NBSjj v_or_sjj = new NBOracle(); //就业系统
+          v_ms_sjj.vp_Connect0();
+          v_or_sjj.vp_Connect0();
+          for (String vf_s1 : NBSjj.wf_bms_jy) {
+              ResultSet vf_rs = v_ms_sjj.xp_read(vf_s1, 0, -1);
+              v_or_sjj.xp_write(vf_s1, vf_rs);
+              v_or_sjj.vp_log(vf_s1);
+          }
+          v_or_sjj.xp_rygl(""); //建立人员关联
+          xf_zt = "TZ";
+          
+          for (String vf_s1 : NBSjj.wf_bms_bys) {
+              ResultSet vf_rs = v_or_sjj.xp_read(vf_s1, 0, -1);
+              v_ms_sjj.xp_write(vf_s1, vf_rs);
+          }
+          xf_zt = "TZ";         
+          
+        }catch (Exception ex) {
+            System.out.println("##"+ex.getMessage());  
+        }         
+    }  
+}  

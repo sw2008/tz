@@ -1,0 +1,222 @@
+package com.nb.smdj;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+public class NBSjj {
+    
+    protected final static String ORACLE_DB = "oracle"; 
+    protected final static String MSSQL_DB = "mssql";
+    protected static List<String> wf_bms_jy = new ArrayList<String>(); //需要推送到主库的表
+    protected static List<String> wf_bms_bys = new ArrayList<String>(); //需要从主库取回的表
+    
+    protected Connection wf_conn = null;
+    protected String wf_url = null;
+    protected String wf_user = null;
+    protected String wf_password = null;
+    protected String wf_driver = null;    
+    
+    private String vf_s1 = null;
+    private PreparedStatement wf_ps = null;//insert语句(目标库)
+    private Map<String,String> wf_al = new  LinkedHashMap<String,String>(); //参数列表
+    
+    private String vp_bm0(String i_bm) {
+	String v_bm =i_bm;
+	if("FILE_".equals(v_bm) && this instanceof NBMssql) v_bm="FILE";
+	return v_bm;
+    }    
+   
+     
+    //加载表数据到数据集(表名,开始内码,记录数)
+    public ResultSet xp_read(String i_bm,int i_ksnm,int i_jls) {
+	ResultSet vf_rs = null;
+	try {	    
+	    Statement str=wf_conn.createStatement();	
+	    vf_s1="select * from "+ vp_bm0(i_bm); 
+	    vf_rs =str. executeQuery(vf_s1);
+	} catch (Exception e) {
+	    vf_rs = null;
+	    vp_log("表不存在:"+i_bm);
+	    e.printStackTrace();	    
+	}
+        
+        return vf_rs; 
+    }
+    
+    //数据集保存完成
+    //主要更新增量数据标识(zx_nb_tbb.gxsj);Oracle端提供重写;
+    protected void xp_write8(String i_bm) throws SQLException {
+	
+    }
+    
+     //人员关联建立
+    //主要更新增量数据标识(zx_nb_tbb.gxsj);Oracle端提供重写;
+    public void xp_rygl(String i_bm) throws SQLException {
+	
+    }
+    
+    //数据集保存到表(表名,数据集)
+    public void xp_write(String i_bm,ResultSet i_rs) {
+	try {
+	    PreparedStatement vf_ps=null;
+	    vp_addSql(i_bm);
+	    while (i_rs.next()){ 
+		try {
+	  	  vp_delData(i_bm,i_rs);
+		  vf_ps = vp_addData(i_rs);		
+		  vf_ps.execute();  //vf_ps.executeUpdate();
+		}catch(Exception e) {
+		    vp_log_db(e.getMessage(),i_bm);  
+		}		
+		wf_conn.commit();
+	    }
+	    xp_write8(i_bm); //更新同步控制
+	    wf_conn.commit();
+	} catch (Exception e) {	  
+	    e.printStackTrace();	    
+	}
+    }
+    
+    //生成insert 语句
+    private void vp_addSql(String i_bm) throws SQLException {	
+	PreparedStatement vf_ps = wf_conn.prepareStatement("SELECT * FROM "+ i_bm + " where 1=0");
+	ResultSet vf_rs = vf_ps.executeQuery();
+	ResultSetMetaData vf_rmd = vf_rs.getMetaData();int vf_n = vf_rmd.getColumnCount();	
+	wf_al.clear();
+	
+	//生成SQL语句
+	StringBuffer vf_sb1 = new StringBuffer("insert into "+i_bm+"(");
+	StringBuffer vf_sb2 = new StringBuffer("values(");	
+	for (int i = 1; i <= vf_n; i++) {	       
+	    String vf_lm = vf_rmd.getColumnName(i); // 获取列名	    
+	    int vf_t = vf_rmd.getColumnType(i);// 获取每一列的数据类型	    
+	    if (Types.CLOB != vf_t) {
+	      if(i>=2) {vf_sb1.append(",");vf_sb2.append(",");}	
+	      vf_sb1.append(vf_lm);vf_sb2.append("?");
+	      if(i==vf_n){vf_sb1.append(") ");vf_sb2.append(")");}
+	    } 
+           wf_al.put(vf_lm, String.valueOf(vf_t));
+	}
+	
+	vf_rs.close();vf_rs = null;vf_ps.close();vf_ps = null;
+	if (wf_ps != null)  wf_ps.close();
+	vf_s1 = vf_sb1.toString()+vf_sb2.toString();
+	wf_ps = wf_conn.prepareStatement(vf_s1);
+    }
+    
+    
+    
+    //删除数据
+    private  void vp_delData(String i_bm,ResultSet i_rs) throws SQLException {
+	String v_s1 = "ID";
+	if ("ZA_GSQY".equals(i_bm)) {v_s1="nbxh";}
+	
+	PreparedStatement vf_ps = wf_conn.prepareStatement("delete from "+ i_bm + " where "+v_s1+"=?");
+	vf_ps.setObject(1,i_rs.getObject(v_s1));vf_ps.execute(); 
+	vf_ps.close();vf_ps = null;
+    }
+    
+    //insert数据
+    private  PreparedStatement vp_addData(ResultSet i_rs) throws SQLException {	
+	int i=0;
+	for (Object vf_key : wf_al.keySet()) {
+            i++;int vf_t = Integer.parseInt(wf_al.get(vf_key));
+            Object v_o = i_rs.getObject((String)vf_key);	    
+            if(v_o == null)
+	      wf_ps.setNull(i,vf_t);
+            else {
+//              if(vf_t==Types.TIMESTAMP)	
+//        	  //pst.setDate(1, java.sql.Date(date.getTime()));//这里的Date是sql中的::得到的是日期
+//              //pst.setTime(2, java.sql.Time(date.getTime()))//sql包中的Time::得到的是时间
+//              //    wf_ps.setObject(3, Timestamp(v_o));//::得到的是日期及时间
+//        	  wf_ps.setNull(i,Types.TIMESTAMP);
+//              else	  
+                wf_ps.setObject(i,v_o);
+            }  
+	}	
+	return wf_ps;
+    }
+    
+    public void vp_log(String i_nr) {
+	System.out.println(i_nr);
+    }
+    
+    private void vp_log_db(String i_nr,String i_bm) {
+	//PreparedStatement vf_ps = wf_conn.prepareStatement("delete from "+ i_bm + " where id=?");
+	//vf_ps.setObject(1,i_rs.getObject("ID"));vf_ps.execute(); 
+	//vf_ps.close();vf_ps = null;
+    }
+    
+    protected Connection vp_Connect0() {
+	try {
+	    if (wf_conn !=null ) return wf_conn;
+	    Class.forName(wf_driver).newInstance();
+	    wf_conn = DriverManager.getConnection(wf_url, wf_user, wf_password);
+	    vp_log("connect is ok");
+	    return wf_conn;
+	} catch (InstantiationException e) {
+	    e.printStackTrace();
+	    return null;
+	} catch (IllegalAccessException e) {
+	    e.printStackTrace();
+	    return null;
+	} catch (ClassNotFoundException e) {
+	    e.printStackTrace();
+	    return null;
+	} catch (SQLException e) {
+	    e.printStackTrace();
+	    return null;
+	}
+    }
+    
+    // 通过配置文件获取数据库连接参数(数据库名)      
+    protected void vp_csh(String db) throws IOException{  
+        Properties properties = new Properties();  
+  
+        InputStream in = new FileInputStream(new File("config/dbconfig.properties"));  
+        properties.load(in);  
+      
+        if(db.equals(ORACLE_DB))  
+        {  
+            vp_ini0(properties,db);  
+        }  
+        if(db.equals(MSSQL_DB))  
+        {  
+            vp_ini0(properties,db);  
+        }  
+    }  
+      
+    // 根据数据库名获取相应的参数(参数,数据库名)        
+    private void vp_ini0(Properties p,String db){          
+        wf_driver = p.getProperty(db + ".driver").trim();  
+        wf_url = p.getProperty(db + ".url").trim();  
+        wf_user = p.getProperty(db + ".username").trim();  
+        wf_password = p.getProperty(db + ".password").trim();  
+    }  
+    
+    protected void vp_close() {
+	if(wf_conn == null) return ;
+	try {
+	    if(wf_conn.isClosed()) return ;
+	    wf_conn.close();
+	} catch (SQLException e) {	   
+	    e.printStackTrace();
+	}	
+    }
+
+}
